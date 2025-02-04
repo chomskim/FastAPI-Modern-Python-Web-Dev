@@ -4,20 +4,20 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from models.database import get_db
-import models
-import schemas
-import oauth2
+from models import user_model
+from schemas import user_schema, token
+from services import oauth2_service as oauth2
+
 from config import settings
 
 router = APIRouter(prefix="/users", tags=["Users"])
-
 router = APIRouter(prefix="/users", tags=["Users"])
 
-@router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.UserOut)
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=user_schema.UserOut)
 def create_user(
-    user: schemas.UserCreate,
+    user: user_schema.UserCreate,
     db: Session = Depends(get_db),
-    current_user: schemas.UserOut = Depends(oauth2.get_current_user),
+    current_user: user_schema.UserOut = Depends(oauth2.get_current_user),
 ):
     # print(f"current_user: {current_user.to_dict()}")
     if not current_user:
@@ -25,14 +25,14 @@ def create_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"User not authenticated",
         )
-    if current_user.name != settings.admin_name:
+    if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"User not authorized to create user",
         )
-    new_user = models.User(**user.dict())
+    new_user = user_model.User(**user.dict())
     # if user already exists raise error
-    check_user = db.query(models.User).filter(models.User.email == new_user.email).first()
+    check_user = db.query(user_model.User).filter(user_model.User.email == new_user.email).first()
 
     if check_user:
         raise HTTPException(
@@ -49,13 +49,13 @@ def create_user(
 
 
 # fetch user information by id
-@router.get("/{id}", response_model=schemas.UserOut)
+@router.get("/{id}", response_model=user_schema.UserOut)
 def get_user(
     id: int,
     db: Session = Depends(get_db),
-    current_user: schemas.UserOut = Depends(oauth2.get_current_user),
+    current_user: user_schema.UserOut = Depends(oauth2.get_current_user),
 ):
-    user = db.query(models.User).filter(models.User.id == id).first()
+    user = db.query(user_model.User).filter(user_model.User.id == id).first()
 
     if not user:
         raise HTTPException(
@@ -67,23 +67,23 @@ def get_user(
 
 
 # fetch all users
-@router.get("/", response_model=list[schemas.UserOut])
+@router.get("/", response_model=list[user_schema.UserOut])
 def get_users(
     db: Session = Depends(get_db),
-    current_user: schemas.UserOut = Depends(oauth2.get_current_user),
+    current_user: user_schema.UserOut = Depends(oauth2.get_current_user),
 ):
-    users = db.query(models.User).all()
+    users = db.query(user_model.User).all()
     return users
 
-@router.post("/login", response_model=schemas.Token)
+@router.post("/login", response_model=token.Token)
 def login(
     user_credentials: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
 
     user = (
-        db.query(models.User)
-        .filter(models.User.email == user_credentials.username)
+        db.query(user_model.User)
+        .filter(user_model.User.email == user_credentials.username)
         .first()
     )
 
@@ -104,6 +104,6 @@ def login(
 
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.get("/me", response_model=schemas.UserOut)
-def me(current_user: schemas.UserOut = Depends(oauth2.get_current_user)):
+@router.get("/me", response_model=user_schema.UserOut)
+def me(current_user: user_schema.UserOut = Depends(oauth2.get_current_user)):
     return current_user

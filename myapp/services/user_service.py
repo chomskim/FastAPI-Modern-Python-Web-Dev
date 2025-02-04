@@ -1,33 +1,29 @@
-import datetime
-import os
-from jose import jwt
-from fastapi import Depends, HTTPException, status
-from passlib.context import CryptContext
-from sqlalchemy.orm import Session
 
-from models.database import get_db
-import models
-import schemas
-import oauth2
+from models.database import SessionLocal
+from models import user_model
+
 from config import settings
+from services import user_crud, oauth2_service as oauth2
 
 
-def create_admin_user(db: Session = Depends(get_db)):
+def create_admin_user() -> user_model.User:
     """Create an admin user if it doesn't exist"""
-    admin = models.User(
-        name=settings.admin_name,
+    admin = user_model.User(
+        username=settings.admin_user,
         email=settings.admin_email,
         password=oauth2.hash(settings.admin_password),
+        is_admin=True,
     )
+    db = SessionLocal()
+    crud = user_crud.UserCRUD(db)
 
     # if admin user already exists , return
-    check_user = db.query(models.User).filter(models.User.email == admin.email).first()
+    check_user = crud.get_user_by_email(admin.email)
     if check_user:
-        return
-    
-    db.add(admin)
-    db.commit()
-    db.refresh(admin)
+        return check_user
+    # add admin user to db
+    crud.create_user(admin)
+
     return admin
 
 # def verify_password(plain: str, hash: str) -> bool:
