@@ -2,14 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # from routers import creature, explorer, game, user
-from routers import user
+from routers import user, auth
 from models.database import Base, engine
-from services import user_service
+from services import oauth2_service
 
 Base.metadata.create_all(bind=engine) 
 
-admin = user_service.create_admin_user()
-print(f"Admin user created: {admin.to_dict()}")
+# admin = oauth2_service.create_admin_user()
+# print(f"Admin user created: {admin.to_dict()}")
 
 app = FastAPI()
 
@@ -27,6 +27,7 @@ app.add_middleware(
 # app.include_router(creature.router)
 # app.include_router(game.router)
 app.include_router(user.router)
+app.include_router(auth.router)
 
 # if __name__ == "__main__":
 #     import uvicorn

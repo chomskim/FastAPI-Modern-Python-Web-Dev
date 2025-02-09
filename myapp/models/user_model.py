@@ -47,7 +47,8 @@ class RefreshToken(Base):
     expires_at = Column(TIMESTAMP(timezone=True), nullable=False)
     revoked = Column(Boolean, default=False)  # Allow revocation
     device_info = Column(String, nullable=True)  # Optional: track user device
-
+    ip_address = Column(String, nullable=True)
+    
     user = relationship("User")
 
 class UserSession(Base):

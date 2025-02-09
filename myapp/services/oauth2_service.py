@@ -11,8 +11,10 @@ from passlib.context import CryptContext
 from error import credentials_exception
 from config import settings
 from models import user_model, database
-from services import user_crud
-
+from services import db_service
+from models.database import SessionLocal
+from services.db_service import UserCRUD
+from schemas import user_schema
 
 SECRET_KEY = settings.secret_key
 ALGORITHM = settings.algorithm
@@ -26,6 +28,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 # oauth2_scheme = OAuth2PasswordBearer(tokenUrl="tokens")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
@@ -58,37 +61,41 @@ def get_current_user(
     db: Session = Depends(database.get_db),
 ) -> user_model.User:
 
-    username = verify_token(token)
-    if username is None:
+    email = verify_token(token)
+    print(f"get_current_user email: {email}")
+    if email is None:
         raise credentials_exception
 
-    user = user_crud.UserCRUD(db).get_user_by_username(username)
+    user = db_service.UserCRUD(db).get_user_by_email(email)
     if user is None:
         raise credentials_exception
+    # print(f"get_current_user user: {user.to_dict()}")
+    # user_out = user_schema.UserOut.model_validate(user)
+    # print(f"get_current_user UserOut: {user_out}")
 
     # 세션 활동 업데이트
     session_id = request.cookies.get("session_id")
     if session_id:
-        user_crud.UserSessionCRUD(db).update_session_activity(session_id)
+        db_service.UserSessionCRUD(db).update_session_activity(session_id)
 
     return user
 
-# def get_current_user(
-#     token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)
-# ):
-#     credentials_exception = HTTPException(
-#         status_code=status.HTTP_401_UNAUTHORIZED,
-#         detail=f"Could not validate credentials",
-#         headers={"WWW-Authenticate": "Bearer"},
-#     )
-#     token = verify_access_token(token, credentials_exception)
-#     user = db.query(models.User).filter(models.User.id == token.id).first()
-#     # print(f"get_current_user -- user: {user.to_dict()}")
-#     return user
+def create_admin_user() -> user_model.User:
+    """Create an admin user if it doesn't exist"""
+    admin = user_model.User(
+        username=settings.admin_user,
+        email=settings.admin_email,
+        password=settings.admin_password,
+        is_admin=True,
+    )
+    db = SessionLocal()
+    user_crud = UserCRUD(db)
 
-def hash(password: str):
-    return pwd_context.hash(password)
+    # if admin user already exists , return
+    check_user = user_crud.get_user_by_email(admin.email)
+    if check_user:
+        return check_user
+    # add admin user to db
+    user_crud.create_user(admin)
 
-
-def verify(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    return admin

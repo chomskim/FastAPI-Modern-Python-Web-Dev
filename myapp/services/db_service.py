@@ -6,11 +6,8 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from models import user_model
 from schemas import user_schema
-from models.database import SessionLocal
-from config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 class UserCRUD:
     def __init__(self, db: Session):
@@ -41,13 +38,13 @@ class UserCRUD:
         return self.db.query(user_model.User).offset(skip).limit(limit).all()
 
     def create_user(self, user: user_schema.UserCreate) -> user_model.User:
-        hashed_password = pwd_context.hash(user.password)
         db_user = user_model.User(
             username=user.username, 
             email=user.email, 
-            password=hashed_password,
-            is_admin=user.is_admin
+            password=pwd_context.hash(user.password),
+            is_admin=user.is_admin 
         )
+        print(f"db_user: {db_user.to_dict()}")
         self.db.add(db_user)
         self.db.commit()
         self.db.refresh(db_user)
@@ -139,22 +136,3 @@ class UserSessionCRUD:
             .all()
         )
 
-def create_admin_user() -> user_model.User:
-    """Create an admin user if it doesn't exist"""
-    admin = user_model.User(
-        username=settings.admin_user,
-        email=settings.admin_email,
-        password=oauth2.hash(settings.admin_password),
-        is_admin=True,
-    )
-    db = SessionLocal()
-    user_crud = UserCRUD(db)
-
-    # if admin user already exists , return
-    check_user = user_crud.get_user_by_email(admin.email)
-    if check_user:
-        return check_user
-    # add admin user to db
-    user_crud.create_user(admin)
-
-    return admin
